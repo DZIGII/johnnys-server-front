@@ -52,8 +52,7 @@ function CsvViewer({ blob }: { blob: Blob }) {
   if (err) return <p style={{ color: "#a39d96", padding: 24 }}>Nije moguće parsirati CSV fajl.</p>
 
   return (
-    <div style={{ overflowAuto: "scroll", overflowX: "auto", overflowY: "auto", maxHeight: "75vh" }}>
-      <table
+    <div style={{ overflow: "auto", maxHeight: "75vh" }}>      <table
         style={{
           width: "100%",
           borderCollapse: "collapse",
