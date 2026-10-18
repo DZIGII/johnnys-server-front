@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge"
 import FolderCard from "@/components/FolderCard"
 import FileThumbnail from "@/components/FileThumbnail"
 import DocumentViewer from "@/components/DocumentViewer"
+import { UploadQueue } from "@/components/UploadQueue"
+import { useUploadQueue } from "@/hooks/useUploadQueue"
 import {
   Folder, FolderPlus, Upload, Trash2, Eye, EyeOff,
   Download, ChevronRight, HardDrive, Loader2, Image, Film, FileText, Plus,
@@ -75,9 +77,8 @@ export default function DrivePage() {
   const [newDriveName, setNewDriveName] = useState(`${user?.firstName ?? "My"}'s Drive`)
   const [creatingDrive, setCreatingDrive] = useState(false)
 
-  // File upload
-  const [uploading, setUploading] = useState(false)
-  const [uploadPct, setUploadPct] = useState(0)
+  // File upload (chunked)
+  const uploadQueue = useUploadQueue(() => { refreshView() })
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // File preview
@@ -239,19 +240,11 @@ export default function DrivePage() {
     await refreshView()
   }
 
-  async function uploadFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file || !currentFolder) return
-    setUploading(true)
-    setUploadPct(0)
-    try {
-      await driveApi.uploadFile(currentFolder.folderId, user!.email, file, setUploadPct)
-      await refreshView()
-    } finally {
-      setUploading(false)
-      setUploadPct(0)
-      if (fileInputRef.current) fileInputRef.current.value = ""
-    }
+  function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files
+    if (!files?.length || !currentFolder) return
+    uploadQueue.add(files, currentFolder.folderId)
+    e.target.value = ""
   }
 
   async function deleteFile(id: string) {
@@ -434,15 +427,18 @@ export default function DrivePage() {
             size="sm"
             className="gap-1.5"
             onClick={() => !isAtRoot && fileInputRef.current?.click()}
-            disabled={uploading || isAtRoot}
-            title={isAtRoot ? "Open a folder to upload files" : undefined}
+            disabled={isAtRoot}
+            title={isAtRoot ? "Otvori folder da bi uploadovao fajlove" : undefined}
           >
-            {uploading
-              ? <><Loader2 className="w-4 h-4 animate-spin" />Uploading {uploadPct}%</>
-              : <><Upload className="w-4 h-4" />Upload</>
-            }
+            <Upload className="w-4 h-4" />
+            Upload
+            {uploadQueue.isBusy && (
+              <span style={{ fontSize: 11, color: "#ff7a1a", marginLeft: 2 }}>
+                {uploadQueue.doneCount}/{uploadQueue.total}
+              </span>
+            )}
           </Button>
-          <input ref={fileInputRef} type="file" className="hidden" onChange={uploadFile} />
+          <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileInput} />
         </div>
       </div>
 
@@ -636,6 +632,16 @@ export default function DrivePage() {
           </div>
         )}
       </div>
+
+      {/* ── Upload queue (floating panel) ─────────────────────────────────── */}
+      <UploadQueue
+        items={uploadQueue.items}
+        doneCount={uploadQueue.doneCount}
+        total={uploadQueue.total}
+        isBusy={uploadQueue.isBusy}
+        onCancel={uploadQueue.cancel}
+        onClear={uploadQueue.clearFinished}
+      />
 
       {/* ── Preview modal ──────────────────────────────────────────────────── */}
       {previewFile && (
